@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show OrderingTerm;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -60,6 +61,15 @@ class _State extends ConsumerState<ChatScreen> {
     }
   }
 
+  Future<void> _attach() async {
+    final r = await FilePicker.pickFiles(
+        type: FileType.custom, allowedExtensions: ['pdf', 'txt', 'md']);
+    final path = r.isEmpty ? null : r.first.path;
+    if (path == null) return;
+    _ctl.text = 'Summarize this document: $path';
+    await _send();
+  }
+
   @override
   Widget build(BuildContext context) {
     final msgs = ref.watch(chatProvider).value ?? const <ChatMessage>[];
@@ -96,6 +106,10 @@ class _State extends ConsumerState<ChatScreen> {
         child: Padding(
           padding: const EdgeInsets.all(8),
           child: Row(children: [
+            IconButton(
+                onPressed: _attach,
+                icon: const Icon(Icons.attach_file),
+                tooltip: 'Summarize a PDF'),
             Expanded(
               child: TextField(
                 controller: _ctl,
