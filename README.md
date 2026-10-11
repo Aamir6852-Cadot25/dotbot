@@ -10,7 +10,7 @@ Open-source AI mentor that stays quiet, speaks at the right moment, and works to
 - Bring your own free Gemini or Groq API key, or use the offline demo brain. Everything is stored on-device.
 - **Simulate a student's day** (You tab) replays every behaviour in about a minute, for demos.
 
-College project docs: [report](docs/REPORT.md) · [evaluation](docs/EVALUATION.md) · [demo script](docs/DEMO_SCRIPT.md).
+College project docs: [slides](docs/slides/Dotbot.pptx) · [report](docs/REPORT.md) · [evaluation](docs/EVALUATION.md) · [demo script](docs/DEMO_SCRIPT.md).
 
 ## Install
 Download the latest artifacts from the GitHub Actions run: `dotbot-apk` (Android) or `dotbot-windows` (unzip, run `dotbot.exe`).
