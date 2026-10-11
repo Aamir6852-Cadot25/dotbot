@@ -144,17 +144,51 @@ class UserModel {
             ..limit(limit))
           .get();
 
-  /// Mean mood of the last [n] logs (null if none).
-  Future<double?> recentMood({int n = 3}) async {
-    final h = await moodHistory(limit: n);
+  /// Mean mood of the last [n] logs, optionally only those [within] a
+  /// window of now (null if none).
+  Future<double?> recentMood({int n = 3, Duration? within}) async {
+    var h = await moodHistory(limit: n);
+    if (within != null) {
+      final from = _now().subtract(within);
+      h = h.where((m) => !m.at.isBefore(from)).toList();
+    }
     if (h.isEmpty) return null;
     return h.map((m) => m.mood).reduce((a, b) => a + b) / h.length;
   }
+
+  // ---- long-term facts (user can view/delete in the Memory page) ----
+  Future<int> remember(String category, String content,
+      {String source = 'agent'}) async {
+    final existing = await (db.select(db.facts)
+          ..where((f) => f.content.equals(content)))
+        .getSingleOrNull();
+    if (existing != null) return existing.id;
+    return db.into(db.facts).insert(FactsCompanion.insert(
+        category: category,
+        content: content,
+        source: Value(source),
+        createdAt: _now()));
+  }
+
+  Future<List<Fact>> facts({String? category, int limit = 50}) {
+    final q = db.select(db.facts);
+    if (category != null) q.where((f) => f.category.equals(category));
+    q
+      ..orderBy([(f) => OrderingTerm.desc(f.id)])
+      ..limit(limit);
+    return q.get();
+  }
+
+  Future<void> forget(int id) =>
+      (db.delete(db.facts)..where((f) => f.id.equals(id))).go();
 
   /// Compact snapshot injected into LLM prompts.
   Future<Map<String, Object?>> snapshot() async => {
         'name': await name,
         'goals': await goals,
+        'memories': [
+          for (final f in await facts(limit: 20)) '${f.category}: ${f.content}'
+        ],
         'streak': await streak(),
         'mastery': await allMastery(),
         'weakTopics': await weakTopics(),

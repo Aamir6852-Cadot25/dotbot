@@ -4,12 +4,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../features/challenges/challenges_screen.dart';
 import '../features/chat/chat_screen.dart';
+import '../features/insights/insights_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
-import '../features/settings/settings_screen.dart';
+import '../features/settings/you_screen.dart';
 import '../features/today/today_screen.dart';
-import '../features/tutor/tutor_screen.dart';
+import '../features/tutor/learn_screen.dart';
 import 'providers.dart';
 
 class DotbotApp extends StatelessWidget {
@@ -62,9 +62,9 @@ class _ShellState extends ConsumerState<HomeShell> {
   static const _tabs = [
     ('Today', Icons.today_outlined, Icons.today),
     ('Chat', Icons.chat_bubble_outline, Icons.chat_bubble),
-    ('Tutor', Icons.school_outlined, Icons.school),
-    ('Practice', Icons.fitness_center_outlined, Icons.fitness_center),
-    ('Settings', Icons.settings_outlined, Icons.settings),
+    ('Learn', Icons.school_outlined, Icons.school),
+    ('Insights', Icons.insights_outlined, Icons.insights),
+    ('You', Icons.person_outline, Icons.person),
   ];
 
   @override
@@ -91,9 +91,9 @@ class _ShellState extends ConsumerState<HomeShell> {
     const pages = [
       TodayScreen(),
       ChatScreen(),
-      TutorScreen(),
-      ChallengesScreen(),
-      SettingsScreen(),
+      LearnScreen(),
+      InsightsScreen(),
+      YouScreen(),
     ];
     final wide = MediaQuery.sizeOf(context).width >= 720;
     final body = IndexedStack(index: _i, children: pages);

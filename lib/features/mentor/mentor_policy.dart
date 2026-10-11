@@ -67,6 +67,15 @@ class MentorPolicy {
     this.lowQuiz = 0.4,
   });
 
+  MentorPolicy withBudget(int budget) => MentorPolicy(
+        dailyBudget: budget,
+        minGap: minGap,
+        skipChance: skipChance,
+        checkinWindow: checkinWindow,
+        lowMood: lowMood,
+        lowQuiz: lowQuiz,
+      );
+
   /// Max proactive messages per day (the "silence budget").
   final int dailyBudget;
   final Duration minGap;
@@ -95,9 +104,6 @@ class MentorPolicy {
       return Decision.speak(Cause.checkin, toneFor(s, Cause.checkin),
           'scheduled check-in is due');
     }
-    if (s.spokeToday >= dailyBudget) {
-      return const Decision.silent('silence budget spent');
-    }
     final last = s.lastSpokeAt;
     if (last != null && s.now.difference(last) < minGap) {
       return const Decision.silent('spoke recently');
@@ -106,10 +112,14 @@ class MentorPolicy {
     final trigger = _firstTrigger(s);
     if (trigger == null) return const Decision.silent('nothing to say');
 
+    // Rituals happen at times the user chose, so they don't spend the budget.
+    final ritual = trigger == Cause.morning || trigger == Cause.night;
+    if (!ritual && s.spokeToday >= dailyBudget) {
+      return const Decision.silent('silence budget spent');
+    }
+
     // Care and rituals are never skipped; nudges sometimes are.
-    final urgent = trigger == Cause.lowMood ||
-        trigger == Cause.morning ||
-        trigger == Cause.night;
+    final urgent = trigger == Cause.lowMood || ritual;
     if (!urgent && !s.lastWasDeliberateSkip && rng.nextDouble() < skipChance) {
       return Decision.silent('deliberate non-intervention',
           trigger: trigger, deliberate: true);

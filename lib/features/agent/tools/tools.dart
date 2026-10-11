@@ -244,6 +244,24 @@ class MemoryUpdateTool extends AgentTool {
   }
 }
 
+class MemoryRememberTool extends AgentTool {
+  @override
+  final spec = ToolSpec(
+      'memory_remember',
+      'Save a durable fact about the user (preference, person, goal, fact). Only save things useful weeks later.',
+      objectSchema({
+        'category': {
+          'type': 'string',
+          'enum': ['goal', 'preference', 'person', 'fact']
+        },
+        'content': str,
+      }, required: ['category', 'content']));
+
+  @override
+  Future<Object?> run(Map<String, dynamic> a, ToolContext c) async =>
+      {'id': await c.user.remember(a['category'] as String, a['content'] as String)};
+}
+
 class OfflineChallengeTool extends AgentTool {
   OfflineChallengeTool({this.rng});
   final Random? rng;
@@ -273,5 +291,6 @@ List<AgentTool> defaultTools(
       JournalReadTool(),
       MemoryGetTool(),
       MemoryUpdateTool(),
+      MemoryRememberTool(),
       OfflineChallengeTool(),
     ];

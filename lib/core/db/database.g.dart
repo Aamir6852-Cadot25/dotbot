@@ -1771,6 +1771,15 @@ class $ChatMessagesTable extends ChatMessages
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _traceMeta = const VerificationMeta('trace');
+  @override
+  late final GeneratedColumn<String> trace = GeneratedColumn<String>(
+    'trace',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _atMeta = const VerificationMeta('at');
   @override
   late final GeneratedColumn<DateTime> at = GeneratedColumn<DateTime>(
@@ -1781,7 +1790,7 @@ class $ChatMessagesTable extends ChatMessages
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, role, content, at];
+  List<GeneratedColumn> get $columns => [id, role, content, trace, at];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1813,6 +1822,12 @@ class $ChatMessagesTable extends ChatMessages
     } else if (isInserting) {
       context.missing(_contentMeta);
     }
+    if (data.containsKey('trace')) {
+      context.handle(
+        _traceMeta,
+        trace.isAcceptableOrUnknown(data['trace']!, _traceMeta),
+      );
+    }
     if (data.containsKey('at')) {
       context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
     } else if (isInserting) {
@@ -1839,6 +1854,10 @@ class $ChatMessagesTable extends ChatMessages
         DriftSqlType.string,
         data['${effectivePrefix}content'],
       )!,
+      trace: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}trace'],
+      ),
       at: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}at'],
@@ -1856,11 +1875,15 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
   final int id;
   final String role;
   final String content;
+
+  /// JSON list of agent steps (thought/tool/observation) for the trace view.
+  final String? trace;
   final DateTime at;
   const ChatMessage({
     required this.id,
     required this.role,
     required this.content,
+    this.trace,
     required this.at,
   });
   @override
@@ -1869,6 +1892,9 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
     map['id'] = Variable<int>(id);
     map['role'] = Variable<String>(role);
     map['content'] = Variable<String>(content);
+    if (!nullToAbsent || trace != null) {
+      map['trace'] = Variable<String>(trace);
+    }
     map['at'] = Variable<DateTime>(at);
     return map;
   }
@@ -1878,6 +1904,9 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
       id: Value(id),
       role: Value(role),
       content: Value(content),
+      trace: trace == null && nullToAbsent
+          ? const Value.absent()
+          : Value(trace),
       at: Value(at),
     );
   }
@@ -1891,6 +1920,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
       id: serializer.fromJson<int>(json['id']),
       role: serializer.fromJson<String>(json['role']),
       content: serializer.fromJson<String>(json['content']),
+      trace: serializer.fromJson<String?>(json['trace']),
       at: serializer.fromJson<DateTime>(json['at']),
     );
   }
@@ -1901,6 +1931,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
       'id': serializer.toJson<int>(id),
       'role': serializer.toJson<String>(role),
       'content': serializer.toJson<String>(content),
+      'trace': serializer.toJson<String?>(trace),
       'at': serializer.toJson<DateTime>(at),
     };
   }
@@ -1909,11 +1940,13 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
     int? id,
     String? role,
     String? content,
+    Value<String?> trace = const Value.absent(),
     DateTime? at,
   }) => ChatMessage(
     id: id ?? this.id,
     role: role ?? this.role,
     content: content ?? this.content,
+    trace: trace.present ? trace.value : this.trace,
     at: at ?? this.at,
   );
   ChatMessage copyWithCompanion(ChatMessagesCompanion data) {
@@ -1921,6 +1954,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
       id: data.id.present ? data.id.value : this.id,
       role: data.role.present ? data.role.value : this.role,
       content: data.content.present ? data.content.value : this.content,
+      trace: data.trace.present ? data.trace.value : this.trace,
       at: data.at.present ? data.at.value : this.at,
     );
   }
@@ -1931,13 +1965,14 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
           ..write('id: $id, ')
           ..write('role: $role, ')
           ..write('content: $content, ')
+          ..write('trace: $trace, ')
           ..write('at: $at')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, role, content, at);
+  int get hashCode => Object.hash(id, role, content, trace, at);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1945,6 +1980,7 @@ class ChatMessage extends DataClass implements Insertable<ChatMessage> {
           other.id == this.id &&
           other.role == this.role &&
           other.content == this.content &&
+          other.trace == this.trace &&
           other.at == this.at);
 }
 
@@ -1952,17 +1988,20 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
   final Value<int> id;
   final Value<String> role;
   final Value<String> content;
+  final Value<String?> trace;
   final Value<DateTime> at;
   const ChatMessagesCompanion({
     this.id = const Value.absent(),
     this.role = const Value.absent(),
     this.content = const Value.absent(),
+    this.trace = const Value.absent(),
     this.at = const Value.absent(),
   });
   ChatMessagesCompanion.insert({
     this.id = const Value.absent(),
     required String role,
     required String content,
+    this.trace = const Value.absent(),
     required DateTime at,
   }) : role = Value(role),
        content = Value(content),
@@ -1971,12 +2010,14 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
     Expression<int>? id,
     Expression<String>? role,
     Expression<String>? content,
+    Expression<String>? trace,
     Expression<DateTime>? at,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (role != null) 'role': role,
       if (content != null) 'content': content,
+      if (trace != null) 'trace': trace,
       if (at != null) 'at': at,
     });
   }
@@ -1985,12 +2026,14 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
     Value<int>? id,
     Value<String>? role,
     Value<String>? content,
+    Value<String?>? trace,
     Value<DateTime>? at,
   }) {
     return ChatMessagesCompanion(
       id: id ?? this.id,
       role: role ?? this.role,
       content: content ?? this.content,
+      trace: trace ?? this.trace,
       at: at ?? this.at,
     );
   }
@@ -2007,6 +2050,9 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
     if (content.present) {
       map['content'] = Variable<String>(content.value);
     }
+    if (trace.present) {
+      map['trace'] = Variable<String>(trace.value);
+    }
     if (at.present) {
       map['at'] = Variable<DateTime>(at.value);
     }
@@ -2019,6 +2065,7 @@ class ChatMessagesCompanion extends UpdateCompanion<ChatMessage> {
           ..write('id: $id, ')
           ..write('role: $role, ')
           ..write('content: $content, ')
+          ..write('trace: $trace, ')
           ..write('at: $at')
           ..write(')'))
         .toString();
@@ -2067,6 +2114,50 @@ class $MentorEventsTable extends MentorEvents
       'CHECK ("spoke" IN (0, 1))',
     ),
   );
+  static const VerificationMeta _reasonMeta = const VerificationMeta('reason');
+  @override
+  late final GeneratedColumn<String> reason = GeneratedColumn<String>(
+    'reason',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _toneMeta = const VerificationMeta('tone');
+  @override
+  late final GeneratedColumn<String> tone = GeneratedColumn<String>(
+    'tone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _messageMeta = const VerificationMeta(
+    'message',
+  );
+  @override
+  late final GeneratedColumn<String> message = GeneratedColumn<String>(
+    'message',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _effectiveMeta = const VerificationMeta(
+    'effective',
+  );
+  @override
+  late final GeneratedColumn<bool> effective = GeneratedColumn<bool>(
+    'effective',
+    aliasedName,
+    true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("effective" IN (0, 1))',
+    ),
+  );
   static const VerificationMeta _atMeta = const VerificationMeta('at');
   @override
   late final GeneratedColumn<DateTime> at = GeneratedColumn<DateTime>(
@@ -2077,7 +2168,16 @@ class $MentorEventsTable extends MentorEvents
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, trigger, spoke, at];
+  List<GeneratedColumn> get $columns => [
+    id,
+    trigger,
+    spoke,
+    reason,
+    tone,
+    message,
+    effective,
+    at,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -2109,6 +2209,30 @@ class $MentorEventsTable extends MentorEvents
     } else if (isInserting) {
       context.missing(_spokeMeta);
     }
+    if (data.containsKey('reason')) {
+      context.handle(
+        _reasonMeta,
+        reason.isAcceptableOrUnknown(data['reason']!, _reasonMeta),
+      );
+    }
+    if (data.containsKey('tone')) {
+      context.handle(
+        _toneMeta,
+        tone.isAcceptableOrUnknown(data['tone']!, _toneMeta),
+      );
+    }
+    if (data.containsKey('message')) {
+      context.handle(
+        _messageMeta,
+        message.isAcceptableOrUnknown(data['message']!, _messageMeta),
+      );
+    }
+    if (data.containsKey('effective')) {
+      context.handle(
+        _effectiveMeta,
+        effective.isAcceptableOrUnknown(data['effective']!, _effectiveMeta),
+      );
+    }
     if (data.containsKey('at')) {
       context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
     } else if (isInserting) {
@@ -2135,6 +2259,22 @@ class $MentorEventsTable extends MentorEvents
         DriftSqlType.bool,
         data['${effectivePrefix}spoke'],
       )!,
+      reason: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reason'],
+      )!,
+      tone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tone'],
+      ),
+      message: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}message'],
+      ),
+      effective: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}effective'],
+      ),
       at: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}at'],
@@ -2152,11 +2292,21 @@ class MentorEvent extends DataClass implements Insertable<MentorEvent> {
   final int id;
   final String trigger;
   final bool spoke;
+  final String reason;
+  final String? tone;
+  final String? message;
+
+  /// Set by reflection: did the user act within 2h after this nudge?
+  final bool? effective;
   final DateTime at;
   const MentorEvent({
     required this.id,
     required this.trigger,
     required this.spoke,
+    required this.reason,
+    this.tone,
+    this.message,
+    this.effective,
     required this.at,
   });
   @override
@@ -2165,6 +2315,16 @@ class MentorEvent extends DataClass implements Insertable<MentorEvent> {
     map['id'] = Variable<int>(id);
     map['trigger'] = Variable<String>(trigger);
     map['spoke'] = Variable<bool>(spoke);
+    map['reason'] = Variable<String>(reason);
+    if (!nullToAbsent || tone != null) {
+      map['tone'] = Variable<String>(tone);
+    }
+    if (!nullToAbsent || message != null) {
+      map['message'] = Variable<String>(message);
+    }
+    if (!nullToAbsent || effective != null) {
+      map['effective'] = Variable<bool>(effective);
+    }
     map['at'] = Variable<DateTime>(at);
     return map;
   }
@@ -2174,6 +2334,14 @@ class MentorEvent extends DataClass implements Insertable<MentorEvent> {
       id: Value(id),
       trigger: Value(trigger),
       spoke: Value(spoke),
+      reason: Value(reason),
+      tone: tone == null && nullToAbsent ? const Value.absent() : Value(tone),
+      message: message == null && nullToAbsent
+          ? const Value.absent()
+          : Value(message),
+      effective: effective == null && nullToAbsent
+          ? const Value.absent()
+          : Value(effective),
       at: Value(at),
     );
   }
@@ -2187,6 +2355,10 @@ class MentorEvent extends DataClass implements Insertable<MentorEvent> {
       id: serializer.fromJson<int>(json['id']),
       trigger: serializer.fromJson<String>(json['trigger']),
       spoke: serializer.fromJson<bool>(json['spoke']),
+      reason: serializer.fromJson<String>(json['reason']),
+      tone: serializer.fromJson<String?>(json['tone']),
+      message: serializer.fromJson<String?>(json['message']),
+      effective: serializer.fromJson<bool?>(json['effective']),
       at: serializer.fromJson<DateTime>(json['at']),
     );
   }
@@ -2197,22 +2369,42 @@ class MentorEvent extends DataClass implements Insertable<MentorEvent> {
       'id': serializer.toJson<int>(id),
       'trigger': serializer.toJson<String>(trigger),
       'spoke': serializer.toJson<bool>(spoke),
+      'reason': serializer.toJson<String>(reason),
+      'tone': serializer.toJson<String?>(tone),
+      'message': serializer.toJson<String?>(message),
+      'effective': serializer.toJson<bool?>(effective),
       'at': serializer.toJson<DateTime>(at),
     };
   }
 
-  MentorEvent copyWith({int? id, String? trigger, bool? spoke, DateTime? at}) =>
-      MentorEvent(
-        id: id ?? this.id,
-        trigger: trigger ?? this.trigger,
-        spoke: spoke ?? this.spoke,
-        at: at ?? this.at,
-      );
+  MentorEvent copyWith({
+    int? id,
+    String? trigger,
+    bool? spoke,
+    String? reason,
+    Value<String?> tone = const Value.absent(),
+    Value<String?> message = const Value.absent(),
+    Value<bool?> effective = const Value.absent(),
+    DateTime? at,
+  }) => MentorEvent(
+    id: id ?? this.id,
+    trigger: trigger ?? this.trigger,
+    spoke: spoke ?? this.spoke,
+    reason: reason ?? this.reason,
+    tone: tone.present ? tone.value : this.tone,
+    message: message.present ? message.value : this.message,
+    effective: effective.present ? effective.value : this.effective,
+    at: at ?? this.at,
+  );
   MentorEvent copyWithCompanion(MentorEventsCompanion data) {
     return MentorEvent(
       id: data.id.present ? data.id.value : this.id,
       trigger: data.trigger.present ? data.trigger.value : this.trigger,
       spoke: data.spoke.present ? data.spoke.value : this.spoke,
+      reason: data.reason.present ? data.reason.value : this.reason,
+      tone: data.tone.present ? data.tone.value : this.tone,
+      message: data.message.present ? data.message.value : this.message,
+      effective: data.effective.present ? data.effective.value : this.effective,
       at: data.at.present ? data.at.value : this.at,
     );
   }
@@ -2223,13 +2415,18 @@ class MentorEvent extends DataClass implements Insertable<MentorEvent> {
           ..write('id: $id, ')
           ..write('trigger: $trigger, ')
           ..write('spoke: $spoke, ')
+          ..write('reason: $reason, ')
+          ..write('tone: $tone, ')
+          ..write('message: $message, ')
+          ..write('effective: $effective, ')
           ..write('at: $at')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, trigger, spoke, at);
+  int get hashCode =>
+      Object.hash(id, trigger, spoke, reason, tone, message, effective, at);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2237,6 +2434,10 @@ class MentorEvent extends DataClass implements Insertable<MentorEvent> {
           other.id == this.id &&
           other.trigger == this.trigger &&
           other.spoke == this.spoke &&
+          other.reason == this.reason &&
+          other.tone == this.tone &&
+          other.message == this.message &&
+          other.effective == this.effective &&
           other.at == this.at);
 }
 
@@ -2244,17 +2445,29 @@ class MentorEventsCompanion extends UpdateCompanion<MentorEvent> {
   final Value<int> id;
   final Value<String> trigger;
   final Value<bool> spoke;
+  final Value<String> reason;
+  final Value<String?> tone;
+  final Value<String?> message;
+  final Value<bool?> effective;
   final Value<DateTime> at;
   const MentorEventsCompanion({
     this.id = const Value.absent(),
     this.trigger = const Value.absent(),
     this.spoke = const Value.absent(),
+    this.reason = const Value.absent(),
+    this.tone = const Value.absent(),
+    this.message = const Value.absent(),
+    this.effective = const Value.absent(),
     this.at = const Value.absent(),
   });
   MentorEventsCompanion.insert({
     this.id = const Value.absent(),
     required String trigger,
     required bool spoke,
+    this.reason = const Value.absent(),
+    this.tone = const Value.absent(),
+    this.message = const Value.absent(),
+    this.effective = const Value.absent(),
     required DateTime at,
   }) : trigger = Value(trigger),
        spoke = Value(spoke),
@@ -2263,12 +2476,20 @@ class MentorEventsCompanion extends UpdateCompanion<MentorEvent> {
     Expression<int>? id,
     Expression<String>? trigger,
     Expression<bool>? spoke,
+    Expression<String>? reason,
+    Expression<String>? tone,
+    Expression<String>? message,
+    Expression<bool>? effective,
     Expression<DateTime>? at,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (trigger != null) 'trigger': trigger,
       if (spoke != null) 'spoke': spoke,
+      if (reason != null) 'reason': reason,
+      if (tone != null) 'tone': tone,
+      if (message != null) 'message': message,
+      if (effective != null) 'effective': effective,
       if (at != null) 'at': at,
     });
   }
@@ -2277,12 +2498,20 @@ class MentorEventsCompanion extends UpdateCompanion<MentorEvent> {
     Value<int>? id,
     Value<String>? trigger,
     Value<bool>? spoke,
+    Value<String>? reason,
+    Value<String?>? tone,
+    Value<String?>? message,
+    Value<bool?>? effective,
     Value<DateTime>? at,
   }) {
     return MentorEventsCompanion(
       id: id ?? this.id,
       trigger: trigger ?? this.trigger,
       spoke: spoke ?? this.spoke,
+      reason: reason ?? this.reason,
+      tone: tone ?? this.tone,
+      message: message ?? this.message,
+      effective: effective ?? this.effective,
       at: at ?? this.at,
     );
   }
@@ -2299,6 +2528,18 @@ class MentorEventsCompanion extends UpdateCompanion<MentorEvent> {
     if (spoke.present) {
       map['spoke'] = Variable<bool>(spoke.value);
     }
+    if (reason.present) {
+      map['reason'] = Variable<String>(reason.value);
+    }
+    if (tone.present) {
+      map['tone'] = Variable<String>(tone.value);
+    }
+    if (message.present) {
+      map['message'] = Variable<String>(message.value);
+    }
+    if (effective.present) {
+      map['effective'] = Variable<bool>(effective.value);
+    }
     if (at.present) {
       map['at'] = Variable<DateTime>(at.value);
     }
@@ -2311,6 +2552,10 @@ class MentorEventsCompanion extends UpdateCompanion<MentorEvent> {
           ..write('id: $id, ')
           ..write('trigger: $trigger, ')
           ..write('spoke: $spoke, ')
+          ..write('reason: $reason, ')
+          ..write('tone: $tone, ')
+          ..write('message: $message, ')
+          ..write('effective: $effective, ')
           ..write('at: $at')
           ..write(')'))
         .toString();
@@ -2604,6 +2849,752 @@ class CheckinsCompanion extends UpdateCompanion<Checkin> {
   }
 }
 
+class $FactsTable extends Facts with TableInfo<$FactsTable, Fact> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $FactsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _categoryMeta = const VerificationMeta(
+    'category',
+  );
+  @override
+  late final GeneratedColumn<String> category = GeneratedColumn<String>(
+    'category',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+    'source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('agent'),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    category,
+    content,
+    source,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'facts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Fact> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('category')) {
+      context.handle(
+        _categoryMeta,
+        category.isAcceptableOrUnknown(data['category']!, _categoryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_categoryMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(
+        _sourceMeta,
+        source.isAcceptableOrUnknown(data['source']!, _sourceMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Fact map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Fact(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      category: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}category'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      source: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}source'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $FactsTable createAlias(String alias) {
+    return $FactsTable(attachedDatabase, alias);
+  }
+}
+
+class Fact extends DataClass implements Insertable<Fact> {
+  final int id;
+
+  /// goal | preference | person | fact | strategy
+  final String category;
+  final String content;
+
+  /// user | agent | reflection
+  final String source;
+  final DateTime createdAt;
+  const Fact({
+    required this.id,
+    required this.category,
+    required this.content,
+    required this.source,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['category'] = Variable<String>(category);
+    map['content'] = Variable<String>(content);
+    map['source'] = Variable<String>(source);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  FactsCompanion toCompanion(bool nullToAbsent) {
+    return FactsCompanion(
+      id: Value(id),
+      category: Value(category),
+      content: Value(content),
+      source: Value(source),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Fact.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Fact(
+      id: serializer.fromJson<int>(json['id']),
+      category: serializer.fromJson<String>(json['category']),
+      content: serializer.fromJson<String>(json['content']),
+      source: serializer.fromJson<String>(json['source']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'category': serializer.toJson<String>(category),
+      'content': serializer.toJson<String>(content),
+      'source': serializer.toJson<String>(source),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Fact copyWith({
+    int? id,
+    String? category,
+    String? content,
+    String? source,
+    DateTime? createdAt,
+  }) => Fact(
+    id: id ?? this.id,
+    category: category ?? this.category,
+    content: content ?? this.content,
+    source: source ?? this.source,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Fact copyWithCompanion(FactsCompanion data) {
+    return Fact(
+      id: data.id.present ? data.id.value : this.id,
+      category: data.category.present ? data.category.value : this.category,
+      content: data.content.present ? data.content.value : this.content,
+      source: data.source.present ? data.source.value : this.source,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Fact(')
+          ..write('id: $id, ')
+          ..write('category: $category, ')
+          ..write('content: $content, ')
+          ..write('source: $source, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, category, content, source, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Fact &&
+          other.id == this.id &&
+          other.category == this.category &&
+          other.content == this.content &&
+          other.source == this.source &&
+          other.createdAt == this.createdAt);
+}
+
+class FactsCompanion extends UpdateCompanion<Fact> {
+  final Value<int> id;
+  final Value<String> category;
+  final Value<String> content;
+  final Value<String> source;
+  final Value<DateTime> createdAt;
+  const FactsCompanion({
+    this.id = const Value.absent(),
+    this.category = const Value.absent(),
+    this.content = const Value.absent(),
+    this.source = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  FactsCompanion.insert({
+    this.id = const Value.absent(),
+    required String category,
+    required String content,
+    this.source = const Value.absent(),
+    required DateTime createdAt,
+  }) : category = Value(category),
+       content = Value(content),
+       createdAt = Value(createdAt);
+  static Insertable<Fact> custom({
+    Expression<int>? id,
+    Expression<String>? category,
+    Expression<String>? content,
+    Expression<String>? source,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (category != null) 'category': category,
+      if (content != null) 'content': content,
+      if (source != null) 'source': source,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  FactsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? category,
+    Value<String>? content,
+    Value<String>? source,
+    Value<DateTime>? createdAt,
+  }) {
+    return FactsCompanion(
+      id: id ?? this.id,
+      category: category ?? this.category,
+      content: content ?? this.content,
+      source: source ?? this.source,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (category.present) {
+      map['category'] = Variable<String>(category.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('FactsCompanion(')
+          ..write('id: $id, ')
+          ..write('category: $category, ')
+          ..write('content: $content, ')
+          ..write('source: $source, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ReflectionsTable extends Reflections
+    with TableInfo<$ReflectionsTable, Reflection> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ReflectionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _dayMeta = const VerificationMeta('day');
+  @override
+  late final GeneratedColumn<String> day = GeneratedColumn<String>(
+    'day',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _summaryMeta = const VerificationMeta(
+    'summary',
+  );
+  @override
+  late final GeneratedColumn<String> summary = GeneratedColumn<String>(
+    'summary',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _strategyMeta = const VerificationMeta(
+    'strategy',
+  );
+  @override
+  late final GeneratedColumn<String> strategy = GeneratedColumn<String>(
+    'strategy',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _statsMeta = const VerificationMeta('stats');
+  @override
+  late final GeneratedColumn<String> stats = GeneratedColumn<String>(
+    'stats',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    day,
+    summary,
+    strategy,
+    stats,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'reflections';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Reflection> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('day')) {
+      context.handle(
+        _dayMeta,
+        day.isAcceptableOrUnknown(data['day']!, _dayMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_dayMeta);
+    }
+    if (data.containsKey('summary')) {
+      context.handle(
+        _summaryMeta,
+        summary.isAcceptableOrUnknown(data['summary']!, _summaryMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_summaryMeta);
+    }
+    if (data.containsKey('strategy')) {
+      context.handle(
+        _strategyMeta,
+        strategy.isAcceptableOrUnknown(data['strategy']!, _strategyMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_strategyMeta);
+    }
+    if (data.containsKey('stats')) {
+      context.handle(
+        _statsMeta,
+        stats.isAcceptableOrUnknown(data['stats']!, _statsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_statsMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_createdAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Reflection map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Reflection(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      day: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}day'],
+      )!,
+      summary: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}summary'],
+      )!,
+      strategy: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}strategy'],
+      )!,
+      stats: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}stats'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $ReflectionsTable createAlias(String alias) {
+    return $ReflectionsTable(attachedDatabase, alias);
+  }
+}
+
+class Reflection extends DataClass implements Insertable<Reflection> {
+  final int id;
+  final String day;
+  final String summary;
+  final String strategy;
+  final String stats;
+  final DateTime createdAt;
+  const Reflection({
+    required this.id,
+    required this.day,
+    required this.summary,
+    required this.strategy,
+    required this.stats,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['day'] = Variable<String>(day);
+    map['summary'] = Variable<String>(summary);
+    map['strategy'] = Variable<String>(strategy);
+    map['stats'] = Variable<String>(stats);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ReflectionsCompanion toCompanion(bool nullToAbsent) {
+    return ReflectionsCompanion(
+      id: Value(id),
+      day: Value(day),
+      summary: Value(summary),
+      strategy: Value(strategy),
+      stats: Value(stats),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory Reflection.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Reflection(
+      id: serializer.fromJson<int>(json['id']),
+      day: serializer.fromJson<String>(json['day']),
+      summary: serializer.fromJson<String>(json['summary']),
+      strategy: serializer.fromJson<String>(json['strategy']),
+      stats: serializer.fromJson<String>(json['stats']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'day': serializer.toJson<String>(day),
+      'summary': serializer.toJson<String>(summary),
+      'strategy': serializer.toJson<String>(strategy),
+      'stats': serializer.toJson<String>(stats),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  Reflection copyWith({
+    int? id,
+    String? day,
+    String? summary,
+    String? strategy,
+    String? stats,
+    DateTime? createdAt,
+  }) => Reflection(
+    id: id ?? this.id,
+    day: day ?? this.day,
+    summary: summary ?? this.summary,
+    strategy: strategy ?? this.strategy,
+    stats: stats ?? this.stats,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  Reflection copyWithCompanion(ReflectionsCompanion data) {
+    return Reflection(
+      id: data.id.present ? data.id.value : this.id,
+      day: data.day.present ? data.day.value : this.day,
+      summary: data.summary.present ? data.summary.value : this.summary,
+      strategy: data.strategy.present ? data.strategy.value : this.strategy,
+      stats: data.stats.present ? data.stats.value : this.stats,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Reflection(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('summary: $summary, ')
+          ..write('strategy: $strategy, ')
+          ..write('stats: $stats, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, day, summary, strategy, stats, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Reflection &&
+          other.id == this.id &&
+          other.day == this.day &&
+          other.summary == this.summary &&
+          other.strategy == this.strategy &&
+          other.stats == this.stats &&
+          other.createdAt == this.createdAt);
+}
+
+class ReflectionsCompanion extends UpdateCompanion<Reflection> {
+  final Value<int> id;
+  final Value<String> day;
+  final Value<String> summary;
+  final Value<String> strategy;
+  final Value<String> stats;
+  final Value<DateTime> createdAt;
+  const ReflectionsCompanion({
+    this.id = const Value.absent(),
+    this.day = const Value.absent(),
+    this.summary = const Value.absent(),
+    this.strategy = const Value.absent(),
+    this.stats = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  ReflectionsCompanion.insert({
+    this.id = const Value.absent(),
+    required String day,
+    required String summary,
+    required String strategy,
+    required String stats,
+    required DateTime createdAt,
+  }) : day = Value(day),
+       summary = Value(summary),
+       strategy = Value(strategy),
+       stats = Value(stats),
+       createdAt = Value(createdAt);
+  static Insertable<Reflection> custom({
+    Expression<int>? id,
+    Expression<String>? day,
+    Expression<String>? summary,
+    Expression<String>? strategy,
+    Expression<String>? stats,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (day != null) 'day': day,
+      if (summary != null) 'summary': summary,
+      if (strategy != null) 'strategy': strategy,
+      if (stats != null) 'stats': stats,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  ReflectionsCompanion copyWith({
+    Value<int>? id,
+    Value<String>? day,
+    Value<String>? summary,
+    Value<String>? strategy,
+    Value<String>? stats,
+    Value<DateTime>? createdAt,
+  }) {
+    return ReflectionsCompanion(
+      id: id ?? this.id,
+      day: day ?? this.day,
+      summary: summary ?? this.summary,
+      strategy: strategy ?? this.strategy,
+      stats: stats ?? this.stats,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (day.present) {
+      map['day'] = Variable<String>(day.value);
+    }
+    if (summary.present) {
+      map['summary'] = Variable<String>(summary.value);
+    }
+    if (strategy.present) {
+      map['strategy'] = Variable<String>(strategy.value);
+    }
+    if (stats.present) {
+      map['stats'] = Variable<String>(stats.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ReflectionsCompanion(')
+          ..write('id: $id, ')
+          ..write('day: $day, ')
+          ..write('summary: $summary, ')
+          ..write('strategy: $strategy, ')
+          ..write('stats: $stats, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $KvTable extends Kv with TableInfo<$KvTable, KvData> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -2822,6 +3813,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ChatMessagesTable chatMessages = $ChatMessagesTable(this);
   late final $MentorEventsTable mentorEvents = $MentorEventsTable(this);
   late final $CheckinsTable checkins = $CheckinsTable(this);
+  late final $FactsTable facts = $FactsTable(this);
+  late final $ReflectionsTable reflections = $ReflectionsTable(this);
   late final $KvTable kv = $KvTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
@@ -2836,6 +3829,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     chatMessages,
     mentorEvents,
     checkins,
+    facts,
+    reflections,
     kv,
   ];
 }
@@ -3853,6 +4848,7 @@ typedef $$ChatMessagesTableCreateCompanionBuilder =
       Value<int> id,
       required String role,
       required String content,
+      Value<String?> trace,
       required DateTime at,
     });
 typedef $$ChatMessagesTableUpdateCompanionBuilder =
@@ -3860,6 +4856,7 @@ typedef $$ChatMessagesTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> role,
       Value<String> content,
+      Value<String?> trace,
       Value<DateTime> at,
     });
 
@@ -3884,6 +4881,11 @@ class $$ChatMessagesTableFilterComposer
 
   ColumnFilters<String> get content => $composableBuilder(
     column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get trace => $composableBuilder(
+    column: $table.trace,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3917,6 +4919,11 @@ class $$ChatMessagesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get trace => $composableBuilder(
+    column: $table.trace,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get at => $composableBuilder(
     column: $table.at,
     builder: (column) => ColumnOrderings(column),
@@ -3940,6 +4947,9 @@ class $$ChatMessagesTableAnnotationComposer
 
   GeneratedColumn<String> get content =>
       $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<String> get trace =>
+      $composableBuilder(column: $table.trace, builder: (column) => column);
 
   GeneratedColumn<DateTime> get at =>
       $composableBuilder(column: $table.at, builder: (column) => column);
@@ -3979,11 +4989,13 @@ class $$ChatMessagesTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> role = const Value.absent(),
                 Value<String> content = const Value.absent(),
+                Value<String?> trace = const Value.absent(),
                 Value<DateTime> at = const Value.absent(),
               }) => ChatMessagesCompanion(
                 id: id,
                 role: role,
                 content: content,
+                trace: trace,
                 at: at,
               ),
           createCompanionCallback:
@@ -3991,11 +5003,13 @@ class $$ChatMessagesTableTableManager
                 Value<int> id = const Value.absent(),
                 required String role,
                 required String content,
+                Value<String?> trace = const Value.absent(),
                 required DateTime at,
               }) => ChatMessagesCompanion.insert(
                 id: id,
                 role: role,
                 content: content,
+                trace: trace,
                 at: at,
               ),
           withReferenceMapper: (p0) => p0
@@ -4037,6 +5051,10 @@ typedef $$MentorEventsTableCreateCompanionBuilder =
       Value<int> id,
       required String trigger,
       required bool spoke,
+      Value<String> reason,
+      Value<String?> tone,
+      Value<String?> message,
+      Value<bool?> effective,
       required DateTime at,
     });
 typedef $$MentorEventsTableUpdateCompanionBuilder =
@@ -4044,6 +5062,10 @@ typedef $$MentorEventsTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> trigger,
       Value<bool> spoke,
+      Value<String> reason,
+      Value<String?> tone,
+      Value<String?> message,
+      Value<bool?> effective,
       Value<DateTime> at,
     });
 
@@ -4068,6 +5090,26 @@ class $$MentorEventsTableFilterComposer
 
   ColumnFilters<bool> get spoke => $composableBuilder(
     column: $table.spoke,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tone => $composableBuilder(
+    column: $table.tone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get effective => $composableBuilder(
+    column: $table.effective,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4101,6 +5143,26 @@ class $$MentorEventsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get reason => $composableBuilder(
+    column: $table.reason,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tone => $composableBuilder(
+    column: $table.tone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get message => $composableBuilder(
+    column: $table.message,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get effective => $composableBuilder(
+    column: $table.effective,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get at => $composableBuilder(
     column: $table.at,
     builder: (column) => ColumnOrderings(column),
@@ -4124,6 +5186,18 @@ class $$MentorEventsTableAnnotationComposer
 
   GeneratedColumn<bool> get spoke =>
       $composableBuilder(column: $table.spoke, builder: (column) => column);
+
+  GeneratedColumn<String> get reason =>
+      $composableBuilder(column: $table.reason, builder: (column) => column);
+
+  GeneratedColumn<String> get tone =>
+      $composableBuilder(column: $table.tone, builder: (column) => column);
+
+  GeneratedColumn<String> get message =>
+      $composableBuilder(column: $table.message, builder: (column) => column);
+
+  GeneratedColumn<bool> get effective =>
+      $composableBuilder(column: $table.effective, builder: (column) => column);
 
   GeneratedColumn<DateTime> get at =>
       $composableBuilder(column: $table.at, builder: (column) => column);
@@ -4163,11 +5237,19 @@ class $$MentorEventsTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> trigger = const Value.absent(),
                 Value<bool> spoke = const Value.absent(),
+                Value<String> reason = const Value.absent(),
+                Value<String?> tone = const Value.absent(),
+                Value<String?> message = const Value.absent(),
+                Value<bool?> effective = const Value.absent(),
                 Value<DateTime> at = const Value.absent(),
               }) => MentorEventsCompanion(
                 id: id,
                 trigger: trigger,
                 spoke: spoke,
+                reason: reason,
+                tone: tone,
+                message: message,
+                effective: effective,
                 at: at,
               ),
           createCompanionCallback:
@@ -4175,11 +5257,19 @@ class $$MentorEventsTableTableManager
                 Value<int> id = const Value.absent(),
                 required String trigger,
                 required bool spoke,
+                Value<String> reason = const Value.absent(),
+                Value<String?> tone = const Value.absent(),
+                Value<String?> message = const Value.absent(),
+                Value<bool?> effective = const Value.absent(),
                 required DateTime at,
               }) => MentorEventsCompanion.insert(
                 id: id,
                 trigger: trigger,
                 spoke: spoke,
+                reason: reason,
+                tone: tone,
+                message: message,
+                effective: effective,
                 at: at,
               ),
           withReferenceMapper: (p0) => p0
@@ -4386,6 +5476,422 @@ typedef $$CheckinsTableProcessedTableManager =
       Checkin,
       PrefetchHooks Function()
     >;
+typedef $$FactsTableCreateCompanionBuilder = FactsCompanion Function({
+  Value<int> id,
+  required String category,
+  required String content,
+  Value<String> source,
+  required DateTime createdAt,
+});
+typedef $$FactsTableUpdateCompanionBuilder = FactsCompanion Function({
+  Value<int> id,
+  Value<String> category,
+  Value<String> content,
+  Value<String> source,
+  Value<DateTime> createdAt,
+});
+
+class $$FactsTableFilterComposer extends Composer<_$AppDatabase, $FactsTable> {
+  $$FactsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$FactsTableOrderingComposer
+    extends Composer<_$AppDatabase, $FactsTable> {
+  $$FactsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get category => $composableBuilder(
+    column: $table.category,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get source => $composableBuilder(
+    column: $table.source,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$FactsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $FactsTable> {
+  $$FactsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get category =>
+      $composableBuilder(column: $table.category, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$FactsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $FactsTable,
+          Fact,
+          $$FactsTableFilterComposer,
+          $$FactsTableOrderingComposer,
+          $$FactsTableAnnotationComposer,
+          $$FactsTableCreateCompanionBuilder,
+          $$FactsTableUpdateCompanionBuilder,
+          (Fact, BaseReferences<_$AppDatabase, $FactsTable, Fact>),
+          Fact,
+          PrefetchHooks Function()
+        > {
+  $$FactsTableTableManager(_$AppDatabase db, $FactsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$FactsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$FactsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$FactsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> category = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<String> source = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => FactsCompanion(
+                id: id,
+                category: category,
+                content: content,
+                source: source,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String category,
+                required String content,
+                Value<String> source = const Value.absent(),
+                required DateTime createdAt,
+              }) => FactsCompanion.insert(
+                id: id,
+                category: category,
+                content: content,
+                source: source,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$FactsTable, Fact>(table),
+                  BaseReferences<_$AppDatabase, $FactsTable, Fact>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$FactsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $FactsTable,
+      Fact,
+      $$FactsTableFilterComposer,
+      $$FactsTableOrderingComposer,
+      $$FactsTableAnnotationComposer,
+      $$FactsTableCreateCompanionBuilder,
+      $$FactsTableUpdateCompanionBuilder,
+      (Fact, BaseReferences<_$AppDatabase, $FactsTable, Fact>),
+      Fact,
+      PrefetchHooks Function()
+    >;
+typedef $$ReflectionsTableCreateCompanionBuilder =
+    ReflectionsCompanion Function({
+      Value<int> id,
+      required String day,
+      required String summary,
+      required String strategy,
+      required String stats,
+      required DateTime createdAt,
+    });
+typedef $$ReflectionsTableUpdateCompanionBuilder =
+    ReflectionsCompanion Function({
+      Value<int> id,
+      Value<String> day,
+      Value<String> summary,
+      Value<String> strategy,
+      Value<String> stats,
+      Value<DateTime> createdAt,
+    });
+
+class $$ReflectionsTableFilterComposer
+    extends Composer<_$AppDatabase, $ReflectionsTable> {
+  $$ReflectionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get day => $composableBuilder(
+    column: $table.day,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get strategy => $composableBuilder(
+    column: $table.strategy,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get stats => $composableBuilder(
+    column: $table.stats,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ReflectionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ReflectionsTable> {
+  $$ReflectionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get day => $composableBuilder(
+    column: $table.day,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get summary => $composableBuilder(
+    column: $table.summary,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get strategy => $composableBuilder(
+    column: $table.strategy,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get stats => $composableBuilder(
+    column: $table.stats,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ReflectionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ReflectionsTable> {
+  $$ReflectionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get day =>
+      $composableBuilder(column: $table.day, builder: (column) => column);
+
+  GeneratedColumn<String> get summary =>
+      $composableBuilder(column: $table.summary, builder: (column) => column);
+
+  GeneratedColumn<String> get strategy =>
+      $composableBuilder(column: $table.strategy, builder: (column) => column);
+
+  GeneratedColumn<String> get stats =>
+      $composableBuilder(column: $table.stats, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ReflectionsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ReflectionsTable,
+          Reflection,
+          $$ReflectionsTableFilterComposer,
+          $$ReflectionsTableOrderingComposer,
+          $$ReflectionsTableAnnotationComposer,
+          $$ReflectionsTableCreateCompanionBuilder,
+          $$ReflectionsTableUpdateCompanionBuilder,
+          (
+            Reflection,
+            BaseReferences<_$AppDatabase, $ReflectionsTable, Reflection>,
+          ),
+          Reflection,
+          PrefetchHooks Function()
+        > {
+  $$ReflectionsTableTableManager(_$AppDatabase db, $ReflectionsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ReflectionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ReflectionsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ReflectionsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> day = const Value.absent(),
+                Value<String> summary = const Value.absent(),
+                Value<String> strategy = const Value.absent(),
+                Value<String> stats = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => ReflectionsCompanion(
+                id: id,
+                day: day,
+                summary: summary,
+                strategy: strategy,
+                stats: stats,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String day,
+                required String summary,
+                required String strategy,
+                required String stats,
+                required DateTime createdAt,
+              }) => ReflectionsCompanion.insert(
+                id: id,
+                day: day,
+                summary: summary,
+                strategy: strategy,
+                stats: stats,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$ReflectionsTable, Reflection>(table),
+                  BaseReferences<_$AppDatabase, $ReflectionsTable, Reflection>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ReflectionsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ReflectionsTable,
+      Reflection,
+      $$ReflectionsTableFilterComposer,
+      $$ReflectionsTableOrderingComposer,
+      $$ReflectionsTableAnnotationComposer,
+      $$ReflectionsTableCreateCompanionBuilder,
+      $$ReflectionsTableUpdateCompanionBuilder,
+      (
+        Reflection,
+        BaseReferences<_$AppDatabase, $ReflectionsTable, Reflection>,
+      ),
+      Reflection,
+      PrefetchHooks Function()
+    >;
 typedef $$KvTableCreateCompanionBuilder = KvCompanion Function({
   required String key,
   required String value,
@@ -4533,5 +6039,9 @@ class $AppDatabaseManager {
       $$MentorEventsTableTableManager(_db, _db.mentorEvents);
   $$CheckinsTableTableManager get checkins =>
       $$CheckinsTableTableManager(_db, _db.checkins);
+  $$FactsTableTableManager get facts =>
+      $$FactsTableTableManager(_db, _db.facts);
+  $$ReflectionsTableTableManager get reflections =>
+      $$ReflectionsTableTableManager(_db, _db.reflections);
   $$KvTableTableManager get kv => $$KvTableTableManager(_db, _db.kv);
 }

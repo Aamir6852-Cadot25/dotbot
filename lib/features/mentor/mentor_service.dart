@@ -10,6 +10,7 @@ import '../agent/prompts.dart';
 import '../agent/tools/tool.dart';
 import '../agent/tools/tools.dart';
 import '../memory/user_model.dart';
+import '../reflection/reflection_service.dart';
 import 'mentor_policy.dart';
 
 /// Result of one background/foreground evaluation.
@@ -81,7 +82,12 @@ class MentorService {
       streakBroken: await user.streakBroken(),
       recentQuizScore: await user.recentQuizScore(),
       quizAttempts: attempts.length,
-      recentMood: await user.recentMood(),
+      // Current feeling (last 6h); once comforted, don't repeat for 6h.
+      recentMood: spokeEvents.any((e) =>
+              e.trigger == Cause.lowMood.name &&
+              now.difference(e.at) < const Duration(hours: 6))
+          ? null
+          : await user.recentMood(within: const Duration(hours: 6)),
       morningTime: _parse(await user.getKv('morningTime'), const Duration(hours: 7)),
       nightTime: _parse(await user.getKv('nightTime'), const Duration(hours: 22)),
       morningDone: await journaled('morning'),
@@ -99,13 +105,26 @@ class MentorService {
       return const TickResult(Decision.silent('not onboarded'));
     }
     final state = await buildState();
-    final d = policy.decide(state, _rng);
-
-    if (d.trigger != null) {
-      await db.into(db.mentorEvents).insert(MentorEventsCompanion.insert(
-          trigger: d.trigger!.name, spoke: d.speak, at: state.now));
+    // Late night: grade today's nudges and adapt (no LLM needed).
+    final reflection = ReflectionService(db, user, clock: _now);
+    if (state.now.hour >= 23 && !await reflection.reflectedOn(state.now)) {
+      await reflection.reflect();
     }
-    if (!d.speak) return TickResult(d);
+    // The budget is adapted nightly by self-reflection.
+    final budget = int.tryParse(await user.getKv('dailyBudget') ?? '');
+    final d = (budget == null ? policy : policy.withBudget(budget))
+        .decide(state, _rng);
+
+    if (!d.speak) {
+      if (d.trigger != null) {
+        await db.into(db.mentorEvents).insert(MentorEventsCompanion.insert(
+            trigger: d.trigger!.name,
+            spoke: false,
+            reason: Value(d.reason),
+            at: state.now));
+      }
+      return TickResult(d);
+    }
 
     if (d.trigger == Cause.checkin) {
       await (db.update(db.checkins)
@@ -113,15 +132,27 @@ class MentorService {
           .write(const CheckinsCompanion(fired: Value(true)));
     }
 
-    final msg = await _compose(d);
+    final (msg, trace) = await _compose(d);
+    await db.into(db.mentorEvents).insert(MentorEventsCompanion.insert(
+        trigger: d.trigger!.name,
+        spoke: true,
+        reason: Value(d.reason),
+        tone: Value(d.tone.name),
+        message: Value(msg),
+        at: state.now));
     await db.into(db.chatMessages).insert(ChatMessagesCompanion.insert(
-        role: 'assistant', content: msg, at: state.now));
+        role: 'assistant', content: msg, trace: Value(trace), at: state.now));
     await notifier.show('Dotbot', msg);
     return TickResult(d, message: msg);
   }
 
-  Future<String> _compose(Decision d) async {
+  /// Returns the message and its JSON trace (policy step + agent steps).
+  Future<(String, String)> _compose(Decision d) async {
     final ctx = ToolContext(db, user, clock: _now);
+    final trace = <AgentStep>[
+      AgentStep('think',
+          'Mentor policy: ${d.reason} -> speak in a ${d.tone.name} tone.'),
+    ];
     try {
       final agent = await agentFor(ctx);
       if (agent != null) {
@@ -130,12 +161,15 @@ class MentorService {
           history: const [],
           userText: _brief(d.trigger!),
         );
-        if (r.reply.trim().isNotEmpty) return r.reply.trim();
+        if (r.reply.trim().isNotEmpty) {
+          return (r.reply.trim(), AgentStep.encode([...trace, ...r.trace]));
+        }
       }
-    } catch (_) {
-      // Quota/network failure: fall through to the offline line.
+    } catch (e) {
+      trace.add(AgentStep('observe', 'LLM unavailable ($e); using offline line.'));
     }
-    return _offline(d.trigger!, await user.name);
+    final msg = _offline(d.trigger!, await user.name);
+    return (msg, AgentStep.encode([...trace, AgentStep('answer', msg)]));
   }
 
   static String _brief(Cause t) => switch (t) {

@@ -90,6 +90,7 @@ class _State extends ConsumerState<OnboardingScreen> {
                   segments: const [
                     ButtonSegment(value: 'gemini', label: Text('Gemini')),
                     ButtonSegment(value: 'groq', label: Text('Groq')),
+                    ButtonSegment(value: 'demo', label: Text('Offline demo')),
                   ],
                   selected: {_provider},
                   onSelectionChanged: (s) => setState(() => _provider = s.first),
