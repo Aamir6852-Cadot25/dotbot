@@ -6,6 +6,7 @@
 - M4 mentor policy (budget, gap, deliberate silence), MentorService, notifications, workmanager tick
 - M5 UI: onboarding, chat (+PDF summarize), today/planner, mood, stoic journal, tutor, offline challenges, settings
 - M6 docs: README, ARCHITECTURE, ADRs, DECISIONS, CONTRIBUTING; v0.2 stubs (SyncService, AppUsageService)
+- MVP for college: reasoning trace, Memory page, self-reflection + adaptive budget, Insights, offline demo brain, day simulator, persona/Hinglish, synthetic evaluation, report, demo script, slides
 ## Left / ideas
 - Windows has no background scheduler (app ticks while open); tray/startup task in v0.2
 - Per-task reminders via scheduled notifications; streaming chat; Supabase sync; app-usage signal
