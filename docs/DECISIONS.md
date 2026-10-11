@@ -3,3 +3,9 @@
 - PDF: syncfusion rejected (non-permissive community license); decide at M3 (pdfrx/MIT or plain text only).
 - sqlite3_flutter_libs dropped (EOL); drift_flutter bundles sqlite3.
 - Generated drift code is gitignored; CI runs build_runner.
+- Generated drift code (database.g.dart) is committed; CI still runs build_runner.
+- Android: core library desugaring on, minSdk 23 (flutter_local_notifications, secure storage).
+- Agent: tools return JSON observations; errors become observations, never crashes. After 6 LLM steps a final tool-free call is forced.
+- Models: Gemini gemini-2.5-flash, Groq llama-3.3-70b-versatile (configurable in constructors).
+- Hint ladder cap: mastery>=0.7 -> max "hint"; >=0.4 -> "partial"; else may reveal "answer". Beginners (<0.2) skip the bare question.
+- PDF extraction injected via `extract(path)`; real implementation wired in M5.
