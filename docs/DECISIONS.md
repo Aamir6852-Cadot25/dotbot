@@ -9,3 +9,4 @@
 - Models: Gemini gemini-2.5-flash, Groq llama-3.3-70b-versatile (configurable in constructors).
 - Hint ladder cap: mastery>=0.7 -> max "hint"; >=0.4 -> "partial"; else may reveal "answer". Beginners (<0.2) skip the bare question.
 - PDF extraction injected via `extract(path)`; real implementation wired in M5.
+- Renamed enum Trigger->Cause (clashes with drift's Trigger).
