@@ -94,6 +94,10 @@ class MentorService {
       nightDone: await journaled('night'),
       dueCheckin: dueCheckins.isNotEmpty,
       spokeToday: spokeEvents.where((e) => !e.at.isBefore(midnight)).length,
+      spokenToday: {
+        for (final e in spokeEvents.where((e) => !e.at.isBefore(midnight)))
+          ...Cause.values.where((c) => c.name == e.trigger)
+      },
       lastSpokeAt: spokeEvents.isEmpty ? null : spokeEvents.first.at,
       lastWasDeliberateSkip: events.isNotEmpty && !events.first.spoke,
     );

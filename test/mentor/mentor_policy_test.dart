@@ -52,16 +52,38 @@ void main() {
 
   test('silence budget caps proactive messages per day', () {
     final d = policy.decide(
-        MentorState(now: noon, recentMood: 1, spokeToday: 3), never);
+        MentorState(now: noon, overdueTasks: 3, spokeToday: 3), never);
     expect(d.speak, false);
     expect(d.reason, contains('budget'));
+  });
+
+  test('low mood bypasses gap and budget (care first)', () {
+    final d = policy.decide(
+        MentorState(
+            now: noon,
+            recentMood: 1,
+            spokeToday: 9,
+            lastSpokeAt: noon.subtract(const Duration(minutes: 5))),
+        never);
+    expect(d.trigger, Cause.lowMood);
+  });
+
+  test('one-shot nudges fire once per day', () {
+    final d = policy.decide(
+        MentorState(
+            now: noon,
+            recentQuizScore: 0.1,
+            quizAttempts: 5,
+            spokenToday: {Cause.lowQuiz}),
+        never);
+    expect(d.speak, false);
   });
 
   test('minimum gap between messages', () {
     final d = policy.decide(
         MentorState(
             now: noon,
-            recentMood: 1,
+            overdueTasks: 3,
             lastSpokeAt: noon.subtract(const Duration(minutes: 30))),
         never);
     expect(d.speak, false);

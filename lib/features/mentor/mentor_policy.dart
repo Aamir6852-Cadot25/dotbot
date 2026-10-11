@@ -21,6 +21,7 @@ class MentorState {
     this.spokeToday = 0,
     this.lastSpokeAt,
     this.lastWasDeliberateSkip = false,
+    this.spokenToday = const {},
   });
 
   final DateTime now;
@@ -37,6 +38,9 @@ class MentorState {
   final int spokeToday;
   final DateTime? lastSpokeAt;
   final bool lastWasDeliberateSkip;
+
+  /// Causes already spoken about today (one-shot nudges don't repeat).
+  final Set<Cause> spokenToday;
 }
 
 class Decision {
@@ -104,17 +108,19 @@ class MentorPolicy {
       return Decision.speak(Cause.checkin, toneFor(s, Cause.checkin),
           'scheduled check-in is due');
     }
-    final last = s.lastSpokeAt;
-    if (last != null && s.now.difference(last) < minGap) {
-      return const Decision.silent('spoke recently');
-    }
-
     final trigger = _firstTrigger(s);
     if (trigger == null) return const Decision.silent('nothing to say');
 
+    // Care comes first: low mood ignores the gap and the budget.
+    final care = trigger == Cause.lowMood;
+    final last = s.lastSpokeAt;
+    if (!care && last != null && s.now.difference(last) < minGap) {
+      return const Decision.silent('spoke recently');
+    }
+
     // Rituals happen at times the user chose, so they don't spend the budget.
     final ritual = trigger == Cause.morning || trigger == Cause.night;
-    if (!ritual && s.spokeToday >= dailyBudget) {
+    if (!care && !ritual && s.spokeToday >= dailyBudget) {
       return const Decision.silent('silence budget spent');
     }
 
@@ -133,9 +139,16 @@ class MentorPolicy {
     if (_inWindow(s.now, s.morningTime) && !s.morningDone) return Cause.morning;
     if (_inWindow(s.now, s.nightTime) && !s.nightDone) return Cause.night;
     if (s.overdueTasks >= 2) return Cause.missedTasks;
-    if (s.streakBroken) return Cause.streakBroken;
+    if (s.streakBroken && !s.spokenToday.contains(Cause.streakBroken)) {
+      return Cause.streakBroken;
+    }
     final q = s.recentQuizScore;
-    if (q != null && s.quizAttempts >= 3 && q < lowQuiz) return Cause.lowQuiz;
+    if (q != null &&
+        s.quizAttempts >= 3 &&
+        q < lowQuiz &&
+        !s.spokenToday.contains(Cause.lowQuiz)) {
+      return Cause.lowQuiz;
+    }
     return null;
   }
 
